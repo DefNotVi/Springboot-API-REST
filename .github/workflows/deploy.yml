@@ -69,11 +69,14 @@ jobs:
         script: |
           export ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
           
-          # Autenticación nativa en ECR desde Amazon Linux 2023
+          # Autenticación nativa en ECR
           aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $ECR_REGISTRY
           
-          # Refrescar y levantar el contenedor en el puerto 8080
-          docker pull $ECR_REGISTRY/back-ventas:latest
+          # 🧹 EL TRUCO DE ESPACIO: Forzar limpieza absoluta del almacenamiento de Docker
           docker stop back-ventas || true
           docker rm back-ventas || true
+          docker system prune -af --volumes || true
+          
+          # Descargar e iniciar contenedor optimizado
+          docker pull $ECR_REGISTRY/back-ventas:latest
           docker run -d --name back-ventas -p 8080:8080 $ECR_REGISTRY/back-ventas:latest
