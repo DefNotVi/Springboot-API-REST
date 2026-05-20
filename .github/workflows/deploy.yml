@@ -74,7 +74,6 @@ jobs:
         envs: ECR_REGISTRY
         envs_format: tomal
         script: |
-        script: |
           export ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
           aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $ECR_REGISTRY
           
