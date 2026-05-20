@@ -12,7 +12,7 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Configurar Java JDK 17
-      uses: actions/setup-java@v3
+      uses: actions/setup-java@v4
       with:
         java-version: '17'
         distribution: 'temurin'
@@ -58,18 +58,23 @@ jobs:
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
 
-    - name: Ejecutar comandos de despliegue remotos
+    - name: Obtener ID de la Instancia App por su Tag
+      id: get-instance
+      run: |
+        # Buscamos la instancia ec2-app que es donde deben correr tus backends
+        INSTANCE_ID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=ec2-app" "Name=instance-state-name,Values=running" --query "Reservations[*].Instances[*].InstanceId" --output text)
+        echo "INSTANCE_ID=$INSTANCE_ID" >> $GITHUB_OUTPUT
+
+    - name: Desplegar en EC2 App via AWS Systems Manager (SSM)
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
       run: |
-        # Conseguimos el ID de la instancia dinámicamente
-        INSTANCE_ID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=web" "Name=instance-state-name,Values=running" --query "Reservations[*].Instances[*].InstanceId" --output text)
-        
-        # Enviamos la orden de ejecución forzando la actualización de paquetes
         aws ssm send-command \
-          --instance-ids "$INSTANCE_ID" \
+          --instance-ids "${{ steps.get-instance.outputs.INSTANCE_ID }}" \
           --document-name "AWS-RunShellScript" \
+          --comment "Desplegando Backend de Ventas en la capa de App" \
           --parameters 'commands=[
+            "sudo apt-get update -y && sudo apt-get install docker.io -y",
             "sudo systemctl start docker || true",
             "sudo aws ecr get-login-password --region us-east-1 | sudo docker login --username AWS --password-stdin '"$ECR_REGISTRY"'",
             "sudo docker pull '"$ECR_REGISTRY"'/back-ventas:latest",
