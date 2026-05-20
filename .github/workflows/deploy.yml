@@ -58,28 +58,22 @@ jobs:
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
 
-    - name: Obtener ID de la Instancia App por su Tag
-      id: get-instance
-      run: |
-        # Buscamos la instancia ec2-app que es donde deben correr tus backends
-        INSTANCE_ID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=ec2-app" "Name=instance-state-name,Values=running" --query "Reservations[*].Instances[*].InstanceId" --output text)
-        echo "INSTANCE_ID=$INSTANCE_ID" >> $GITHUB_OUTPUT
-
-    - name: Desplegar en EC2 App via AWS Systems Manager (SSM)
-      env:
-        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-      run: |
-        aws ssm send-command \
-          --instance-ids "${{ steps.get-instance.outputs.INSTANCE_ID }}" \
-          --document-name "AWS-RunShellScript" \
-          --comment "Desplegando Backend de Ventas en la capa de App" \
-          --parameters 'commands=[
-            "sudo apt-get update -y && sudo apt-get install docker.io -y",
-            "sudo systemctl start docker || true",
-            "sudo aws ecr get-login-password --region us-east-1 | sudo docker login --username AWS --password-stdin '"$ECR_REGISTRY"'",
-            "sudo docker pull '"$ECR_REGISTRY"'/back-ventas:latest",
-            "sudo docker stop back-ventas || true",
-            "sudo docker rm back-ventas || true",
-            "sudo docker run -d --name back-ventas -p 8080:8080 '"$ECR_REGISTRY"'/back-ventas:latest"
-          ]' \
-          --region us-east-1
+    - name: Desplegar en EC2 via SSH Directo
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.AWS_EC2_IP }}
+        username: ec2-user
+        key: ${{ secrets.AWS_SSH_KEY }}
+        envs: ECR_REGISTRY
+        envs_format: tomal
+        script: |
+          export ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
+          
+          # Autenticación nativa en ECR desde Amazon Linux 2023
+          aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $ECR_REGISTRY
+          
+          # Refrescar y levantar el contenedor en el puerto 8080
+          docker pull $ECR_REGISTRY/back-ventas:latest
+          docker stop back-ventas || true
+          docker rm back-ventas || true
+          docker run -d --name back-ventas -p 8080:8080 $ECR_REGISTRY/back-ventas:latest
