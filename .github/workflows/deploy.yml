@@ -86,4 +86,11 @@ jobs:
           
           # Descargar e iniciar el contenedor en la máquina correcta
           docker pull $ECR_REGISTRY/back-ventas:latest
-          docker run -d --name back-ventas -p 8080:8080 $ECR_REGISTRY/back-ventas:latest
+          docker run -d --name back-ventas \
+            -p 8080:8080 \
+            -e DB_ENDPOINT=127.0.0.1 \
+            -e DB_PORT=3306 \
+            -e SPRING_DATASOURCE_USERNAME=root \
+            -e SPRING_DATASOURCE_PASSWORD=mi_clave_secreta \
+            -e SPRING_DATASOURCE_URL="jdbc:mysql://127.0.0.1:3306/db_despacho?allowPublicKeyRetrieval=true&useSSL=false" \
+            $ECR_REGISTRY/back-ventas:latest
