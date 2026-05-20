@@ -74,17 +74,15 @@ jobs:
         envs: ECR_REGISTRY
         envs_format: tomal
         script: |
+        script: |
           export ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
-          
-          # Autenticación nativa en ECR dentro de la máquina privada
           aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $ECR_REGISTRY
           
-          # Limpieza absoluta para asegurar los 20 GB de espacio
+          # 1. Detener y remover SOLO el contenedor viejo de ventas
           docker stop back-ventas || true
           docker rm back-ventas || true
-          docker system prune -af --volumes || true
           
-          # Descargar e iniciar el contenedor usando la IP del bridge de Docker
+          # 2. Desplegar limpiamente sin tocar nada más
           docker pull $ECR_REGISTRY/back-ventas:latest
           docker run -d --name back-ventas \
             -p 8080:8080 \
